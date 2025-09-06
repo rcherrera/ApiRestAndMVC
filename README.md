@@ -84,3 +84,30 @@ flowchart LR
     R -->|EXEC| SP_Ins --> T
     R -->|EXEC| SP_Upd --> T
     R -->|EXEC| SP_Del --> T
+
+sequenceDiagram
+    participant U as Usuario
+    participant V as Org.Mvc/View (_Nodo modal)
+    participant C as MVC Controller
+    participant S as OrgApiClient
+    participant A as API Controller
+    participant R as OrgRepo
+    participant DB as SQL Server (SP Org_Update)
+
+    U->>V: Completa formulario de edición
+    V->>C: POST /Organigrama/Editar
+    C->>S: UpdateAsync(id, dto)
+    S->>A: PUT /api/Organigrama/{id} (JSON)
+    A->>R: UpdateAsync(...)
+    R->>DB: EXEC dbo.Org_Update
+    DB-->>R: filas afectadas / error
+    alt OK
+        A-->>S: 204 No Content
+        S-->>C: éxito
+        C-->>V: RedirectToAction(Index) + TempData["Ok"]
+    else Error negocio
+        A-->>S: 400/404/409
+        S-->>C: lanza excepción
+        C-->>V: RedirectToAction(Index) + TempData["Error"]
+    end
+
