@@ -14,13 +14,13 @@ Proyecto **API RESTful** construido con ASP.NET Core:
   - **PUT {id}** → actualiza un nodo existente.  
   - **DELETE {id}** → elimina un nodo (validando dependencias).
 - Usa **Stored Procedures** en SQL Server:
-  - `Org_GetTree`  
-  - `Org_Insert`  
-  - `Org_Update`  
-  - `Org_Delete`
-- Manejo de errores con códigos semánticos (`400`, `404`, `409`) en lugar de `500`.
+  - Org_GetTree
+  - Org_Insert  
+  - Org_Update
+  - Org_Delete
+- Manejo de errores con códigos semánticos (400, 404, 409) en lugar de 500.
 - Incluye **Swagger/OpenAPI** para documentación y pruebas.
-- Implementación con **Dapper** y conexiones SQL seguras (`Encrypt=True`).
+- Implementación con **Dapper** y conexiones SQL seguras (Encrypt=True).
 
 ---
 
@@ -54,38 +54,36 @@ Proyecto **ASP.NET Core MVC** que consume la API:
 ## 📊 Diagramas
 
 ### 1) Arquitectura (MVC + API + SQL)
+
 ```mermaid
 flowchart LR
+  subgraph Client["Usuario (Browser)"]
+    V["Views Razor"]
+  end
 
-    subgraph Client["Usuario (Browser)"]
-        V["Views Razor"]
-    end
+  subgraph MVC["Org.Mvc (ASP.NET Core MVC)"]
+    C["Controllers"]
+    S["OrgApiClient (HttpClient)"]
+  end
 
-    subgraph MVC["Org.Mvc (ASP.NET Core MVC)"]
-        C["Controllers"]
-        S["OrgApiClient (HttpClient)"]
-    end
+  subgraph API["Org.Api (ASP.NET Core Web API)"]
+    A["OrganigramaController"]
+    R["OrgRepo (Dapper)"]
+  end
+```
 
-    subgraph API["Org.Api (ASP.NET Core Web API)"]
-        A["OrganigramaController"]
-        R["OrgRepo (Dapper)"]
-    end
+```mermaid
+erDiagram
+    Organigrama {
+        INT Id PK
+        NVARCHAR(80) Puesto
+        NVARCHAR(80) Nombre
+        INT JefeId FK "nullable -> self(Id)"
+    }
+    Organigrama ||--o{ Organigrama : Jefe
+```
 
-    subgraph DB["SQL Server"]
-        SP_Get["Org_GetTree"]
-        SP_Ins["Org_Insert"]
-        SP_Upd["Org_Update"]
-        SP_Del["Org_Delete"]
-        T["dbo.Organigrama"]
-    end
-
-    V -->|HTTP| C --> S -->|GET/POST/PUT/DELETE| A --> R
-    R --> SP_Get --> T
-    R --> SP_Ins --> T
-    R --> SP_Upd --> T
-    R --> SP_Del --> T
-
-
+```mermaid
 graph TD
     A["1 Gerente Pedro"]
     B["2 SubGerente Pablo"]
@@ -97,75 +95,109 @@ graph TD
     A --> B --> C
     A --> D --> E
     D --> F
+```
 
-sequenceDiagram
-    participant U as Usuario
-    participant V as Org.Mvc/View (_Nodo modal)
-    participant C as MVC Controller
-    participant S as OrgApiClient
-    participant A as API Controller
-    participant R as OrgRepo
-    participant DB as SQL Server (SP Org_Update)
-
-    U->>V: Completa formulario de edición
-    V->>C: POST /Organigrama/Editar
-    C->>S: UpdateAsync(id, dto)
-    S->>A: PUT /api/Organigrama/{id} (JSON)
-    A->>R: UpdateAsync(...)
-    R->>DB: EXEC dbo.Org_Update
-    DB-->>R: filas afectadas / error
-    alt OK
-        A-->>S: 204 No Content
-        S-->>C: éxito
-        C-->>V: RedirectToAction(Index) + TempData["Ok"]
-    else Error negocio
-        A-->>S: 400/404/409
-        S-->>C: lanza excepción
-        C-->>V: RedirectToAction(Index) + TempData["Error"]
-    end
-
-erDiagram
-    Organigrama {
-        INT Id PK
-        NVARCHAR(80) Puesto
-        NVARCHAR(80) Nombre
-        INT JefeId FK "nullable -> self(Id)"
-    }
-
-    Organigrama ||--o{ Organigrama : "Jefe (self-join)"
-
+```mermaid
 flowchart LR
   subgraph API["/api/Organigrama"]
-    GET_TREE["GET /tree → 200 OK"]
-    POST_ITEM["POST / → 201 Created"]
-    PUT_ITEM["PUT /{id} → 204 No Content"]
-    DEL_ITEM["DELETE /{id} → 204 No Content"]
+    GET_TREE["GET /tree → 200"]
+    POST_ITEM["POST / → 201/200"]
+    PUT_ITEM["PUT /{id} → 204"]
+    DEL_ITEM["DELETE /{id} → 204"]
   end
 
-  note right of API
-    Errores:
-    • 400 BadRequest
-    • 404 NotFound
-    • 409 Conflict
-  end
-
+```
+Endpoints
+```mermaid
 sequenceDiagram
-    participant U as Usuario (Browser)
-    participant IIS1 as IIS – Site1 (API)
-    participant K1 as Kestrel – Org.Api.dll
+    participant U as Usuario
+    participant IIS2 as IIS (MVC - site2)
+    participant K2 as Kestrel (Org.Mvc.dll)
+    participant IIS1 as IIS (API - site1)
+    participant K1 as Kestrel (Org.Api.dll)
     participant DB as SQL Server
-    participant IIS2 as IIS – Site2 (MVC)
-    participant K2 as Kestrel – Org.Mvc.dll
 
-    U->>IIS2: GET https://…/site2/
-    IIS2->>K2: Proxy → Org.Mvc.dll
-    K2-->>U: Renderiza vista Index
+    U->>IIS2: GET https://.../site2/
+    IIS2->>K2: Proxy (aspNetCoreModuleV2)
+    K2-->>U: Renderiza Index
 
-    U->>K2: POST/PUT/DELETE en MVC
-    K2->>IIS1: HttpClient → /site1/api/Organigrama/...
-    IIS1->>K1: Proxy → Org.Api.dll
-    K1->>DB: EXEC SPs
+    U->>K2: Acciones (crear/editar/eliminar)
+    K2->>IIS1: HttpClient → https://.../site1/api/Organigrama/...
+    IIS1->>K1: Proxy (aspNetCoreModuleV2)
+    K1->>DB: SPs (GetTree/Insert/Update/Delete)
     DB-->>K1: Resultado
     K1-->>K2: 200/201/204/4xx
-    K2-->>U: Redirect + mensaje Ok/Error
+    K2-->>U: Redirect + mensajes
+```
+
+
+```mermaid
+mindmap
+  root((Organigrama Empresarial))
+    Sistema
+      NET 8
+      ASP.NET Core
+      SQL Server
+      Swagger
+    Org.Api Web API
+      Endpoints
+        GET api-Organigrama-tree
+        POST api-Organigrama
+        PUT api-Organigrama-id
+        DELETE api-Organigrama-id
+      Logica de datos
+        Dapper
+        SPs Org_GetTree
+        SPs Org_Insert
+        SPs Org_Update
+        SPs Org_Delete
+      Errores
+        400 Datos invalidos
+        404 No existe
+        409 Regla de negocio
+      Seguridad
+        ConnectionString en variable de entorno
+        Encrypt True
+    Org.Mvc Frontend MVC
+      Vistas
+        Recursivas Nodo
+        Bootstrap 5
+      Acciones
+        Crear
+        Editar
+        Eliminar
+      Cliente API
+        OrgApiClient HttpClient
+        BaseUrl configurable
+      CSRF
+        AntiForgeryToken
+    Datos Modelo
+      Tabla dbo-Organigrama
+        Id PK
+        Puesto
+        Nombre
+        JefeId nullable self FK
+      Arbol
+        Diccionario Id OrgNode
+        Enlaces Padre Hijo
+        Raices JefeId null
+    Despliegue IIS Kestrel
+      Site1 Org.Api
+        web.config OutOfProcess
+        Swagger habilitado
+      Site2 Org.Mvc
+        web.config OutOfProcess
+        Consume API de Site1
+      WebDAV
+        Deshabilitar PUT y DELETE
+    Troubleshooting
+      404 Ruta o PathBase incorrecto
+      405 WebDAV bloquea metodos
+      500 Conexion SQL o SP
+      Debug logs stdout
+      Endpoint debug temporal
+    Roadmap
+      Modales de edicion
+      Autenticacion JWT Identity
+      Internacionalizacion multiempresa
 ```
