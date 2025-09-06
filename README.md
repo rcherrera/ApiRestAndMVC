@@ -54,36 +54,49 @@ Proyecto **ASP.NET Core MVC** que consume la API:
 ## 📊 Diagramas
 
 ### 1) Arquitectura (MVC + API + SQL)
-
 ```mermaid
 flowchart LR
-    subgraph Client[Usuario (Browser)]
-        V[Views (Razor)]
+
+    subgraph Client["Usuario (Browser)"]
+        V["Views Razor"]
     end
 
-    subgraph MVC[Org.Mvc (ASP.NET Core MVC)]
-        C[Controllers]
-        S[OrgApiClient (HttpClient)]
+    subgraph MVC["Org.Mvc (ASP.NET Core MVC)"]
+        C["Controllers"]
+        S["OrgApiClient (HttpClient)"]
     end
 
-    subgraph API[Org.Api (ASP.NET Core Web API)]
-        A[OrganigramaController]
-        R[OrgRepo (Dapper)]
+    subgraph API["Org.Api (ASP.NET Core Web API)"]
+        A["OrganigramaController"]
+        R["OrgRepo (Dapper)"]
     end
 
-    subgraph DB[(SQL Server)]
-        SP_Get[Org_GetTree]
-        SP_Ins[Org_Insert]
-        SP_Upd[Org_Update]
-        SP_Del[Org_Delete]
-        T[(dbo.Organigrama)]
+    subgraph DB["SQL Server"]
+        SP_Get["Org_GetTree"]
+        SP_Ins["Org_Insert"]
+        SP_Upd["Org_Update"]
+        SP_Del["Org_Delete"]
+        T["dbo.Organigrama"]
     end
 
     V -->|HTTP| C --> S -->|GET/POST/PUT/DELETE| A --> R
-    R -->|EXEC| SP_Get --> T
-    R -->|EXEC| SP_Ins --> T
-    R -->|EXEC| SP_Upd --> T
-    R -->|EXEC| SP_Del --> T
+    R --> SP_Get --> T
+    R --> SP_Ins --> T
+    R --> SP_Upd --> T
+    R --> SP_Del --> T
+
+
+graph TD
+    A["1 Gerente Pedro"]
+    B["2 SubGerente Pablo"]
+    C["3 Supervisor Juan"]
+    D["4 SubGerente José"]
+    E["5 Supervisor Carlos"]
+    F["6 Supervisor Diego"]
+
+    A --> B --> C
+    A --> D --> E
+    D --> F
 
 sequenceDiagram
     participant U as Usuario
@@ -111,3 +124,48 @@ sequenceDiagram
         C-->>V: RedirectToAction(Index) + TempData["Error"]
     end
 
+erDiagram
+    Organigrama {
+        INT Id PK
+        NVARCHAR(80) Puesto
+        NVARCHAR(80) Nombre
+        INT JefeId FK "nullable -> self(Id)"
+    }
+
+    Organigrama ||--o{ Organigrama : "Jefe (self-join)"
+
+flowchart LR
+  subgraph API["/api/Organigrama"]
+    GET_TREE["GET /tree → 200 OK"]
+    POST_ITEM["POST / → 201 Created"]
+    PUT_ITEM["PUT /{id} → 204 No Content"]
+    DEL_ITEM["DELETE /{id} → 204 No Content"]
+  end
+
+  note right of API
+    Errores:
+    • 400 BadRequest
+    • 404 NotFound
+    • 409 Conflict
+  end
+
+sequenceDiagram
+    participant U as Usuario (Browser)
+    participant IIS1 as IIS – Site1 (API)
+    participant K1 as Kestrel – Org.Api.dll
+    participant DB as SQL Server
+    participant IIS2 as IIS – Site2 (MVC)
+    participant K2 as Kestrel – Org.Mvc.dll
+
+    U->>IIS2: GET https://…/site2/
+    IIS2->>K2: Proxy → Org.Mvc.dll
+    K2-->>U: Renderiza vista Index
+
+    U->>K2: POST/PUT/DELETE en MVC
+    K2->>IIS1: HttpClient → /site1/api/Organigrama/...
+    IIS1->>K1: Proxy → Org.Api.dll
+    K1->>DB: EXEC SPs
+    DB-->>K1: Resultado
+    K1-->>K2: 200/201/204/4xx
+    K2-->>U: Redirect + mensaje Ok/Error
+```
