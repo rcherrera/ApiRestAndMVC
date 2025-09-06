@@ -1,24 +1,86 @@
+# 📂 Proyecto: Organigrama Empresarial (.NET 8 + SQL Server)
 
- graph TD A --> B B --> C 
+Este repositorio contiene dos aplicaciones complementarias desarrolladas en **ASP.NET Core 8** que en conjunto permiten **gestionar y visualizar un organigrama jerárquico de empleados** a partir de una tabla recursiva en SQL Server.
 
+---
+
+## ⚙️ Org.Api (Web API REST)
+
+Proyecto **API RESTful** construido con ASP.NET Core:
+
+- Endpoints bajo `/api/Organigrama` para operaciones CRUD:
+  - **GET** `/tree` → devuelve la jerarquía completa en formato árbol.  
+  - **POST** → inserta un nuevo nodo (empleado/puesto).  
+  - **PUT {id}** → actualiza un nodo existente.  
+  - **DELETE {id}** → elimina un nodo (validando dependencias).
+- Usa **Stored Procedures** en SQL Server:
+  - `Org_GetTree`  
+  - `Org_Insert`  
+  - `Org_Update`  
+  - `Org_Delete`
+- Manejo de errores con códigos semánticos (`400`, `404`, `409`) en lugar de `500`.
+- Incluye **Swagger/OpenAPI** para documentación y pruebas.
+- Implementación con **Dapper** y conexiones SQL seguras (`Encrypt=True`).
+
+---
+
+## 🎨 Org.Mvc (Frontend MVC)
+
+Proyecto **ASP.NET Core MVC** que consume la API:
+
+- Interfaz web que renderiza el **árbol jerárquico de empleados** usando recursividad en vistas parciales.
+- Formularios para **crear, editar y eliminar** empleados/puestos desde la UI.
+- Manejo de feedback al usuario con **Bootstrap 5** (mensajes de éxito/error, validación de formularios).
+- Servicios centralizados (`OrgApiClient`) para consumir la API REST.
+- Separación de capas:
+  - **Models** → entidades de UI  
+  - **Controllers** → orquestan llamadas al API  
+  - **Views** → despliegan el organigrama y formularios.
+
+---
+
+## 🛠️ Tecnologías utilizadas
+
+- **.NET 8**  
+- **ASP.NET Core MVC**  
+- **ASP.NET Core Web API**  
+- **SQL Server + Stored Procedures**  
+- **Dapper**  
+- **Bootstrap 5**  
+- **Swagger / Swashbuckle**
+
+---
+
+## 📊 Diagramas
+
+### 1) Arquitectura (MVC + API + SQL)
+
+```mermaid
 flowchart LR
-  subgraph API["Org.Api (ASP.NET Core Web API) — /api/Organigrama"]
-    GET_TREE["GET /tree<br/>→ 200 OK<br/><i>Devuelve árbol</i>"]
-    POST_ITEM["POST /<br/>→ 201/200<br/><i>Crea nodo</i>"]
-    PUT_ITEM["PUT /{id}<br/>→ 204 No Content<br/><i>Actualiza nodo</i>"]
-    DEL_ITEM["DELETE /{id}<br/>→ 204 No Content<br/><i>Elimina nodo</i>"]
-  end
+    subgraph Client[Usuario (Browser)]
+        V[Views (Razor)]
+    end
 
-  note right of API
-    Códigos negocio:
-    • 400 BadRequest (datos inválidos)
-    • 404 NotFound (id no existe)
-    • 409 Conflict (no borrar con hijos / jefe==id)
-  end
+    subgraph MVC[Org.Mvc (ASP.NET Core MVC)]
+        C[Controllers]
+        S[OrgApiClient (HttpClient)]
+    end
 
-  style GET_TREE fill:#e8fff5,stroke:#00a86b
-  style POST_ITEM fill:#eef5ff,stroke:#2b6cb0
-  style PUT_ITEM fill:#fff7e6,stroke:#c05621
-  style DEL_ITEM fill:#ffeef0,stroke:#c53030
+    subgraph API[Org.Api (ASP.NET Core Web API)]
+        A[OrganigramaController]
+        R[OrgRepo (Dapper)]
+    end
 
+    subgraph DB[(SQL Server)]
+        SP_Get[Org_GetTree]
+        SP_Ins[Org_Insert]
+        SP_Upd[Org_Update]
+        SP_Del[Org_Delete]
+        T[(dbo.Organigrama)]
+    end
 
+    V -->|HTTP| C --> S -->|GET/POST/PUT/DELETE| A --> R
+    R -->|EXEC| SP_Get --> T
+    R -->|EXEC| SP_Ins --> T
+    R -->|EXEC| SP_Upd --> T
+    R -->|EXEC| SP_Del --> T
